@@ -108,3 +108,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+// static/js/forms.js - Funciones generales para formularios
+document.addEventListener('DOMContentLoaded', function() {
+    // Prevenir doble envío de formularios
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function() {
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                setTimeout(() => {
+                    submitBtn.disabled = false;
+                }, 3000);
+            }
+        });
+    });
+    
+    // Auto-seleccionar fecha de hoy si está vacía
+    const dateInputs = document.querySelectorAll('input[type="date"]');
+    dateInputs.forEach(input => {
+        if (!input.value) {
+            const today = new Date().toISOString().split('T')[0];
+            input.value = today;
+        }
+    });
+});

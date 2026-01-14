@@ -8,6 +8,8 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
 import json
+from django.http import JsonResponse
+from django.db import models
 
 from .models import Category, Transaction, Investment, Budget
 from .forms import (
@@ -95,54 +97,184 @@ def dashboard(request):
 
 @login_required
 def transactions(request):
-    transactions_list = Transaction.objects.filter(user=request.user).order_by('-date', '-created_at')
+    """
+    Vista principal para manejar todas las transacciones:
+    - Mostrar lista de transacciones
+    - Aplicar filtros
+    - Agregar nuevas transacciones
+    - Calcular totales
+    """
     
-    # Filtering
+    # ============================================
+    # 1. OBTENER Y FILTRAR TRANSACCIONES
+    # ============================================
+    
+    # Obtener todas las transacciones del usuario ordenadas por fecha (más reciente primero)
+    transactions_list = Transaction.objects.filter(
+        user=request.user
+    ).order_by('-date', '-created_at')
+    
+    # Obtener todas las categorías del usuario para el filtro y formulario
+    categories = Category.objects.filter(user=request.user).order_by('name')
+    
+    # Inicializar diccionario para filtros
+    filters = {}
+    
+    # ============================================
+    # 2. APLICAR FILTROS DESDE GET PARAMETERS
+    # ============================================
+    
+    # Filtro por tipo de transacción
     transaction_type = request.GET.get('type', '')
-    category_id = request.GET.get('category', '')
-    start_date = request.GET.get('start_date', '')
-    end_date = request.GET.get('end_date', '')
-    
     if transaction_type:
         transactions_list = transactions_list.filter(transaction_type=transaction_type)
+        filters['type'] = transaction_type
     
+    # Filtro por categoría
+    category_id = request.GET.get('category', '')
     if category_id:
         transactions_list = transactions_list.filter(category_id=category_id)
+        filters['category'] = category_id
     
+    # Filtro por fecha de inicio
+    start_date = request.GET.get('start_date', '')
     if start_date:
-        transactions_list = transactions_list.filter(date__gte=start_date)
+        try:
+            transactions_list = transactions_list.filter(date__gte=start_date)
+            filters['start_date'] = start_date
+        except:
+            messages.warning(request, "Fecha de inicio no válida")
     
+    # Filtro por fecha de fin
+    end_date = request.GET.get('end_date', '')
     if end_date:
-        transactions_list = transactions_list.filter(date__lte=end_date)
+        try:
+            transactions_list = transactions_list.filter(date__lte=end_date)
+            filters['end_date'] = end_date
+        except:
+            messages.warning(request, "Fecha de fin no válida")
     
-    categories = Category.objects.filter(user=request.user)
+    # ============================================
+    # 3. MANEJAR FORMULARIO DE NUEVA TRANSACCIÓN
+    # ============================================
     
     if request.method == 'POST':
-        # CORRECCIÓN: Solo pasar request.POST, user se pasa como kwarg
+        # Crear formulario con datos POST y usuario actual
         form = TransactionForm(request.POST, user=request.user)
+        
         if form.is_valid():
-            transaction = form.save(commit=False)
-            transaction.user = request.user
-            transaction.save()
-            messages.success(request, 'Transacción agregada exitosamente.')
-            return redirect('transactions')
+            try:
+                # Guardar transacción sin commit para agregar usuario
+                transaction = form.save(commit=False)
+                transaction.user = request.user
+                transaction.save()
+                
+                messages.success(request, '✅ Transacción agregada exitosamente.')
+                return redirect('transactions')
+                
+            except Exception as e:
+                messages.error(request, f'❌ Error al guardar la transacción: {str(e)}')
+        else:
+            # Mostrar errores del formulario
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f'❌ {error}')
     else:
-        # CORRECCIÓN: Solo pasar user como kwarg
+        # Si es GET, crear formulario vacío
         form = TransactionForm(user=request.user)
     
+    # ============================================
+    # 4. CALCULAR TOTALES Y ESTADÍSTICAS
+    # ============================================
+    
+    # Calcular totales para las transacciones filtradas
+    totals = transactions_list.aggregate(
+        total_income=Sum('amount', filter=models.Q(transaction_type='INCOME')),
+        total_expenses=Sum('amount', filter=models.Q(transaction_type='EXPENSE')),
+        total_investments=Sum('amount', filter=models.Q(transaction_type='INVESTMENT'))
+    )
+    
+    # Obtener valores o 0 si son None
+    total_income = totals['total_income'] or Decimal('0')
+    total_expenses = totals['total_expenses'] or Decimal('0')
+    total_investments = totals['total_investments'] or Decimal('0')
+    
+    # Calcular balance
+    balance = total_income - total_expenses - total_investments
+    
+    # Calcular estadísticas adicionales
+    transaction_count = transactions_list.count()
+    
+    # Calcular promedio de transacciones
+    avg_transaction = Decimal('0')
+    if transaction_count > 0:
+        total_all = total_income + total_expenses + total_investments
+        avg_transaction = total_all / transaction_count
+    
+    # ============================================
+    # 5. DATOS PARA GRÁFICOS (opcional)
+    # ============================================
+    
+    # Distribución por categoría (últimos 30 días)
+    thirty_days_ago = timezone.now() - timedelta(days=30)
+    recent_transactions = transactions_list.filter(date__gte=thirty_days_ago)
+    
+    category_totals = []
+    for category in categories:
+        cat_total = recent_transactions.filter(
+            category=category,
+            transaction_type='EXPENSE'
+        ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+        
+        if cat_total > 0:
+            category_totals.append({
+                'name': category.name,
+                'total': float(cat_total),
+                'color': category.color,
+                'icon': category.icon
+            })
+    
+    # ============================================
+    # 6. PREPARAR CONTEXTO PARA EL TEMPLATE
+    # ============================================
+    
     context = {
+        # Lista principal
         'transactions': transactions_list,
         'form': form,
         'categories': categories,
-        'filters': {
-            'type': transaction_type,
-            'category': category_id,
-            'start_date': start_date,
-            'end_date': end_date,
-        }
+        
+        # Filtros activos
+        'filters': filters,
+        
+        # Totales y estadísticas
+        'total_income': total_income,
+        'total_expenses': total_expenses,
+        'total_investments': total_investments,
+        'balance': balance,
+        'transaction_count': transaction_count,
+        'avg_transaction': avg_transaction,
+        
+        # Datos para gráficos
+        'category_totals': json.dumps(category_totals),
+        'category_data': category_totals,  # También disponible sin JSON
+        
+        # Fechas útiles
+        'today': timezone.now().date(),
+        'thirty_days_ago': thirty_days_ago.date(),
+        
+        # Mensajes adicionales
+        'has_filters': bool(filters),
+        'is_filtered': any([filters.get('type'), filters.get('category'), 
+                           filters.get('start_date'), filters.get('end_date')]),
     }
     
+    # ============================================
+    # 7. RENDERIZAR TEMPLATE
+    # ============================================
+    
     return render(request, 'finances/transactions.html', context)
+
 
 @login_required
 def categories(request):
@@ -278,10 +410,23 @@ def contact(request):
 
 @login_required
 def delete_transaction(request, transaction_id):
+    """
+    Vista para eliminar una transacción
+    """
     transaction = get_object_or_404(Transaction, id=transaction_id, user=request.user)
+    
     if request.method == 'POST':
-        transaction.delete()
-        messages.success(request, 'Transacción eliminada exitosamente.')
+        try:
+            transaction_description = transaction.description or "Transacción sin descripción"
+            transaction_amount = transaction.amount
+            transaction.delete()
+            
+            messages.success(request, 
+                f'✅ Transacción "{transaction_description}" por ${transaction_amount} eliminada exitosamente.'
+            )
+        except Exception as e:
+            messages.error(request, f'❌ Error al eliminar la transacción: {str(e)}')
+    
     return redirect('transactions')
 
 @login_required
@@ -347,15 +492,21 @@ def delete_investment(request, investment_id):
 # Para editar transacciones
 @login_required
 def edit_transaction(request, transaction_id):
-    """Vista para editar una transacción existente"""
+    """
+    Vista para editar una transacción existente
+    """
     transaction = get_object_or_404(Transaction, id=transaction_id, user=request.user)
     
     if request.method == 'POST':
         form = TransactionForm(request.POST, instance=transaction, user=request.user)
+        
         if form.is_valid():
-            form.save()
-            messages.success(request, '✅ Transacción actualizada exitosamente.')
-            return redirect('transactions')
+            try:
+                form.save()
+                messages.success(request, '✅ Transacción actualizada exitosamente.')
+                return redirect('transactions')
+            except Exception as e:
+                messages.error(request, f'❌ Error al actualizar la transacción: {str(e)}')
         else:
             messages.error(request, '❌ Por favor corrige los errores en el formulario.')
     else:
@@ -364,6 +515,7 @@ def edit_transaction(request, transaction_id):
     context = {
         'form': form,
         'transaction': transaction,
+        'categories': Category.objects.filter(user=request.user),
     }
     
     return render(request, 'finances/edit_transaction.html', context)
@@ -371,5 +523,96 @@ def edit_transaction(request, transaction_id):
 # API para datos de categorías
 @login_required
 def get_category_spending(request):
+
     # Implementa según necesites
     return JsonResponse({})    
+
+
+@login_required
+def get_transaction_stats(request):
+    """
+    API para obtener estadísticas de transacciones (para AJAX)
+    """
+    if request.method == 'GET' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        try:
+            # Obtener período del request
+            period = request.GET.get('period', 'month')  # month, week, year
+            
+            # Calcular fechas según período
+            today = timezone.now().date()
+            
+            if period == 'week':
+                start_date = today - timedelta(days=7)
+            elif period == 'month':
+                start_date = today - timedelta(days=30)
+            elif period == 'year':
+                start_date = today - timedelta(days=365)
+            else:
+                start_date = today - timedelta(days=30)
+            
+            # Obtener transacciones del período
+            transactions = Transaction.objects.filter(
+                user=request.user,
+                date__gte=start_date,
+                date__lte=today
+            )
+            
+            # Calcular estadísticas
+            stats = {
+                'total_income': float(transactions.filter(
+                    transaction_type='INCOME'
+                ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')),
+                
+                'total_expenses': float(transactions.filter(
+                    transaction_type='EXPENSE'
+                ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')),
+                
+                'total_investments': float(transactions.filter(
+                    transaction_type='INVESTMENT'
+                ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')),
+                
+                'transaction_count': transactions.count(),
+                'period': period,
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': today.strftime('%Y-%m-%d'),
+            }
+            
+            return JsonResponse({'success': True, 'stats': stats})
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Método no permitido'})    
+
+@login_required
+def export_transactions(request):
+    """
+    Vista para exportar transacciones a CSV
+    """
+    from django.http import HttpResponse
+    import csv
+    
+    # Crear respuesta CSV
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="transacciones.csv"'
+    
+    writer = csv.writer(response)
+    
+    # Escribir encabezados
+    writer.writerow(['Fecha', 'Descripción', 'Categoría', 'Tipo', 'Monto', 'Usuario'])
+    
+    # Obtener transacciones
+    transactions = Transaction.objects.filter(user=request.user).order_by('-date')
+    
+    # Escribir datos
+    for transaction in transactions:
+        writer.writerow([
+            transaction.date.strftime('%d/%m/%Y'),
+            transaction.description or '',
+            transaction.category.name,
+            transaction.get_transaction_type_display(),
+            str(transaction.amount),
+            transaction.user.username
+        ])
+    
+    return response   

@@ -59,23 +59,43 @@ class TransactionForm(forms.ModelForm):
             if 'class' not in field.widget.attrs:
                 field.widget.attrs['class'] = 'form-control'
     
-    amount = forms.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        widget=forms.NumberInput(attrs={
+    # Campo amount personalizado para manejar mejor los números
+    amount = forms.CharField(
+        widget=forms.TextInput(attrs={
             'class': 'form-control',
-            'step': '0.01',
-            'min': '0.01'
-        })
+            'placeholder': '0.00',
+            'inputmode': 'decimal'
+        }),
+        label="Monto",
+        help_text="Ejemplo: 450000.00"
     )
     
     description = forms.CharField(
+        required=False,
         widget=forms.Textarea(attrs={
             'rows': 3,
             'class': 'form-control',
             'placeholder': 'Descripción de la transacción...'
         })
     )
+    
+    def clean_amount(self):
+        """Limpia y valida el campo amount"""
+        data = self.cleaned_data['amount']
+        
+        # Remover caracteres no numéricos excepto punto
+        data = data.replace('$', '').replace(' ', '').replace(',', '')
+        
+        try:
+            # Convertir a Decimal
+            amount = Decimal(data)
+        except:
+            raise forms.ValidationError("Ingresa un monto válido. Ejemplo: 450000.00")
+        
+        if amount <= 0:
+            raise forms.ValidationError("El monto debe ser mayor a 0")
+        
+        return amount
     
     class Meta:
         model = Transaction
@@ -96,7 +116,7 @@ class TransactionForm(forms.ModelForm):
         labels = {
             'category': 'Categoría',
             'amount': 'Monto',
-            'description': 'Descripción',
+            'description': 'Descripción (opcional)',
             'transaction_type': 'Tipo de Transacción',
             'date': 'Fecha',
         }
