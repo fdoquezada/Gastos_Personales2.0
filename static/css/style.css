@@ -431,3 +431,21 @@ body {
     border-radius: 15px;
     border: none;
 }
+
+/* Formateo de números monetarios */
+.amount-number {
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+}
+
+/* Para separadores de miles */
+.amount-display {
+    letter-spacing: 0.5px;
+}
+
+/* Alinear números correctamente */
+.text-end .amount-display {
+    display: inline-block;
+    min-width: 100px;
+    text-align: right;
+}

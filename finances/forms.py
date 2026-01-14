@@ -44,6 +44,13 @@ class UserRegistrationForm(UserCreationForm):
             user.save()
         return user
 
+    from django import forms
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User
+from .models import Category, Transaction, Investment
+from django.utils import timezone
+from decimal import Decimal, InvalidOperation
+
 class TransactionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         # Extraer 'user' de kwargs antes de llamar al padre
@@ -59,15 +66,17 @@ class TransactionForm(forms.ModelForm):
             if 'class' not in field.widget.attrs:
                 field.widget.attrs['class'] = 'form-control'
     
-    # Campo amount personalizado para manejar mejor los números
+    # Campo amount como CharField para mejor control
     amount = forms.CharField(
+        max_length=20,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': '0.00',
-            'inputmode': 'decimal'
+            'inputmode': 'decimal',
+            'pattern': '[0-9]*\.?[0-9]{0,2}'
         }),
         label="Monto",
-        help_text="Ejemplo: 450000.00"
+        help_text="Ejemplo: 450000.00 o 450000"
     )
     
     description = forms.CharField(
@@ -81,21 +90,80 @@ class TransactionForm(forms.ModelForm):
     
     def clean_amount(self):
         """Limpia y valida el campo amount"""
-        data = self.cleaned_data['amount']
+        amount_str = self.cleaned_data.get('amount', '').strip()
         
-        # Remover caracteres no numéricos excepto punto
-        data = data.replace('$', '').replace(' ', '').replace(',', '')
+        # Si está vacío, mostrar error
+        if not amount_str:
+            raise forms.ValidationError("El monto es requerido")
         
+        # DEBUG: Ver qué valor llega
+        print(f"DEBUG - Monto recibido: '{amount_str}'")
+        
+        # Limpiar el string: remover símbolos de moneda, espacios y comas
+        amount_str = amount_str.replace('$', '').replace(' ', '').replace(',', '')
+        
+        # Si después de limpiar está vacío, error
+        if not amount_str:
+            raise forms.ValidationError("Ingresa un monto válido")
+        
+        # Intentar convertir a Decimal
         try:
+            # Reemplazar punto decimal si viene con coma (formato europeo)
+            if ',' in amount_str and '.' not in amount_str:
+                amount_str = amount_str.replace(',', '.')
+            
+            # Si hay múltiples puntos, tomar solo el primero
+            parts = amount_str.split('.')
+            if len(parts) > 2:
+                amount_str = parts[0] + '.' + ''.join(parts[1:])
+            
             # Convertir a Decimal
-            amount = Decimal(data)
-        except:
-            raise forms.ValidationError("Ingresa un monto válido. Ejemplo: 450000.00")
+            amount = Decimal(amount_str)
+            
+            # DEBUG: Ver el decimal resultante
+            print(f"DEBUG - Monto convertido a Decimal: {amount}")
+            
+        except (InvalidOperation, ValueError) as e:
+            print(f"DEBUG - Error en conversión: {e}")
+            raise forms.ValidationError(
+                f"Ingresa un monto válido. Ejemplos: 450000, 450000.00, 4500.50"
+            )
         
-        if amount <= 0:
+        # Validar que sea positivo
+        if amount <= Decimal('0'):
             raise forms.ValidationError("El monto debe ser mayor a 0")
         
+        # Validar límites razonables
+        if amount > Decimal('1000000000'):  # 1 billón
+            raise forms.ValidationError("El monto es demasiado grande")
+        
         return amount
+    
+    class Meta:
+        model = Transaction
+        fields = ['category', 'amount', 'description', 'transaction_type', 'date']
+        widgets = {
+            'date': forms.DateInput(attrs={
+                'type': 'date',
+                'class': 'form-control',
+                'value': timezone.now().strftime('%Y-%m-%d')
+            }),
+            'transaction_type': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_transaction_type'
+            }),
+            'category': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_category'
+            }),
+        }
+        labels = {
+            'category': 'Categoría',
+            'amount': 'Monto',
+            'description': 'Descripción (opcional)',
+            'transaction_type': 'Tipo de Transacción',
+            'date': 'Fecha',
+        }
     
     class Meta:
         model = Transaction
