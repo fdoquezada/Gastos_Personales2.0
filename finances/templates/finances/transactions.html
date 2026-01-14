@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Transacciones - Finanzas del Hogar{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Transacciones</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addTransactionModal">
+                <i class="fas fa-plus me-1"></i>Nueva Transacción
+            </button>
+        </div>
+    </div>
+
+    <!-- Resumen de Transacciones -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-success bg-opacity-10 border-success">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Total Ingresos</h6>
+                    <h3 class="card-title text-success">${{ total_income|default:"0.00"|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger bg-opacity-10 border-danger">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Total Gastos</h6>
+                    <h3 class="card-title text-danger">${{ total_expenses|default:"0.00"|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info bg-opacity-10 border-info">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Total Inversiones</h6>
+                    <h3 class="card-title text-info">${{ total_investments|default:"0.00"|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card {% if balance >= 0 %}bg-primary bg-opacity-10 border-primary{% else %}bg-warning bg-opacity-10 border-warning{% endif %}">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Balance</h6>
+                    <h3 class="card-title {% if balance >= 0 %}text-primary{% else %}text-warning{% endif %}">
+                        ${{ balance|default:"0.00"|floatformat:2 }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Tipo</label>
+                    <select name="type" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="INCOME" {% if filters.type == 'INCOME' %}selected{% endif %}>Ingresos</option>
+                        <option value="EXPENSE" {% if filters.type == 'EXPENSE' %}selected{% endif %}>Gastos</option>
+                        <option value="INVESTMENT" {% if filters.type == 'INVESTMENT' %}selected{% endif %}>Inversiones</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Categoría</label>
+                    <select name="category" class="form-select">
+                        <option value="">Todas</option>
+                        {% for category in categories %}
+                        <option value="{{ category.id }}" {% if filters.category == category.id|stringformat:"i" %}selected{% endif %}>
+                            {{ category.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Desde</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ filters.start_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Hasta</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ filters.end_date }}">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter me-1"></i>Filtrar
+                    </button>
+                    <a href="{% url 'transactions' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i>Limpiar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de Transacciones -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Descripción</th>
+                            <th>Categoría</th>
+                            <th>Tipo</th>
+                            <th class="text-end">Monto</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>{{ transaction.date|date:"d/m/Y" }}</td>
+                            <td>{{ transaction.description }}</td>
+                            <td>
+                                <span class="badge" style="background-color: {{ transaction.category.color }}; color: white;">
+                                    {{ transaction.category.name }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if transaction.transaction_type == 'INCOME' %}
+                                <span class="badge bg-success">Ingreso</span>
+                                {% elif transaction.transaction_type == 'EXPENSE' %}
+                                <span class="badge bg-danger">Gasto</span>
+                                {% else %}
+                                <span class="badge bg-info">Inversión</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-bold {% if transaction.transaction_type == 'INCOME' %}text-success{% else %}text-danger{% endif %}">
+                                {% if transaction.transaction_type == 'INCOME' %}+{% else %}-{% endif %}
+                                ${{ transaction.amount|floatformat:2 }}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <!-- Botón Editar -->
+                                    <a href="{% url 'edit_transaction' transaction.id %}" class="btn btn-warning" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    
+                                    <!-- Botón Eliminar -->
+                                    <form method="post" action="{% url 'delete_transaction' transaction.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger" 
+                                                onclick="return confirm('¿Estás seguro de eliminar esta transacción?')" 
+                                                title="Eliminar">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4">
+                                <i class="fas fa-exchange-alt fa-2x text-muted mb-2"></i>
+                                <p class="text-muted">No hay transacciones registradas</p>
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addTransactionModal">
+                                    <i class="fas fa-plus me-1"></i>Agregar tu primera transacción
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Paginación (opcional) -->
+            {% if transactions.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if transactions.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ transactions.previous_page_number }}{% for key, value in filters.items %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for i in transactions.paginator.page_range %}
+                    {% if transactions.number == i %}
+                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ i }}{% for key, value in filters.items %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ i }}</a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    {% if transactions.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ transactions.next_page_number }}{% for key, value in filters.items %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal para agregar transacción -->
+<div class="modal fade" id="addTransactionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus-circle me-2"></i>Nueva Transacción
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" id="transactionForm">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tipo de Transacción*</label>
+                            {{ form.transaction_type }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Categoría*</label>
+                            {{ form.category }}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Monto*</label>
+                            {{ form.amount }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Fecha*</label>
+                            {{ form.date }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        {{ form.description }}
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </button>
+                <button type="submit" form="transactionForm" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>Guardar Transacción
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-focus en el primer campo del modal cuando se abre
+        const addTransactionModal = document.getElementById('addTransactionModal');
+        if (addTransactionModal) {
+            addTransactionModal.addEventListener('shown.bs.modal', function () {
+                const firstInput = this.querySelector('input, select, textarea');
+                if (firstInput) firstInput.focus();
+            });
+        }
+        
+        // Confirmación para eliminar
+        const deleteForms = document.querySelectorAll('form[action*="delete_transaction"]');
+        deleteForms.forEach(form => {
+            form.addEventListener('submit', function(e) {
+                if (!confirm('¿Estás seguro de eliminar esta transacción? Esta acción no se puede deshacer.')) {
+                    e.preventDefault();
+                }
+            });
+        });
+        
+        // Formatear montos al mostrar
+        const amountCells = document.querySelectorAll('td.text-end.fw-bold');
+        amountCells.forEach(cell => {
+            const text = cell.textContent.trim();
+            if (text.includes('$')) {
+                const amount = parseFloat(text.replace(/[^0-9.-]+/g, ''));
+                if (!isNaN(amount) && amount >= 1000) {
+                    cell.innerHTML = text.replace(/\$(\d+)/, '$$1');
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

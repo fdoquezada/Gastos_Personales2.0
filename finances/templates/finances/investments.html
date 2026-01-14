@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Inversiones - Finanzas del Hogar{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Inversiones</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addInvestmentModal">
+                <i class="fas fa-plus me-1"></i>Nueva Inversión
+            </button>
+        </div>
+    </div>
+
+    <!-- Resumen de Inversiones -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Valor Total</h6>
+                    <h3 class="card-title text-success">${{ total_value|default:"0.00" }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Inversión Inicial</h6>
+                    <h3 class="card-title">${{ total_initial|default:"0.00" }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">ROI Total</h6>
+                    <h3 class="card-title {% if total_roi > 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ total_roi|default:"0.00" }}%
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Inversiones Activas</h6>
+                    <h3 class="card-title">{{ active_count|default:"0" }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Inversiones -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Tipo</th>
+                            <th>Inversión Inicial</th>
+                            <th>Valor Actual</th>
+                            <th>ROI</th>
+                            <th>Riesgo</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for investment in investments %}
+                        <tr>
+                            <td>{{ investment.name }}</td>
+                            <td>{{ investment.get_investment_type_display }}</td>
+                            <td>${{ investment.initial_amount|floatformat:2 }}</td>
+                            <td>${{ investment.current_value|floatformat:2 }}</td>
+                            <td class="{% if investment.roi > 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ investment.roi|floatformat:2 }}%
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if investment.risk_level == 'LOW' %}success{% elif investment.risk_level == 'MEDIUM' %}warning{% else %}danger{% endif %}">
+                                    {{ investment.get_risk_level_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if investment.is_active %}
+                                <span class="badge bg-success">Activa</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactiva</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="post" action="{% url 'delete_investment' investment.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta inversión?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="fas fa-chart-line fa-2x text-muted mb-2"></i>
+                                <p class="text-muted">No hay inversiones registradas</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para agregar inversión -->
+<div class="modal fade" id="addInvestmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nueva Inversión</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" id="investmentForm">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" form="investmentForm" class="btn btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

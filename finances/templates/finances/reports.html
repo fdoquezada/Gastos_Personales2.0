@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Reportes - Finanzas del Hogar{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Reportes y Gráficos</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <div class="btn-group me-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary">Últimos 6 meses</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary">Este año</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary">Personalizado</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico de Ingresos vs Gastos -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Ingresos vs Gastos (Últimos 6 meses)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="incomeExpenseChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dos gráficos en una fila -->
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Distribución de Gastos</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="expenseDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Evolución de Inversiones</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="investmentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumen por categoría -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Resumen por Categoría</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Tipo</th>
+                                    <th class="text-end">Total Ingresos</th>
+                                    <th class="text-end">Total Gastos</th>
+                                    <th class="text-end">Saldo</th>
+                                    <th>% del Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for category in categories_summary %}
+                                <tr>
+                                    <td>
+                                        <span class="badge" style="background-color: {{ category.color }}; color: white;">
+                                            {{ category.name }}
+                                        </span>
+                                    </td>
+                                    <td>{{ category.get_category_type_display }}</td>
+                                    <td class="text-end text-success">${{ category.total_income|floatformat:2 }}</td>
+                                    <td class="text-end text-danger">${{ category.total_expense|floatformat:2 }}</td>
+                                    <td class="text-end fw-bold {% if category.balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        ${{ category.balance|floatformat:2 }}
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar" role="progressbar" 
+                                                 style="width: {{ category.percentage }}%; background-color: {{ category.color }};">
+                                                {{ category.percentage|floatformat:1 }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-4">
+                                        <i class="fas fa-chart-bar fa-2x text-muted mb-2"></i>
+                                        <p class="text-muted">No hay datos para mostrar</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Datos para los gráficos (deberías obtener estos datos de tu vista)
+        const monthlyData = JSON.parse('{{ monthly_data|escapejs }}');
+        const categorySpending = JSON.parse('{{ category_spending|escapejs }}');
+        
+        // Gráfico de Ingresos vs Gastos
+        if (document.getElementById('incomeExpenseChart')) {
+            const incomeExpenseCtx = document.getElementById('incomeExpenseChart').getContext('2d');
+            
+            const labels = Object.keys(monthlyData).map(key => monthlyData[key].label);
+            const incomeData = Object.keys(monthlyData).map(key => monthlyData[key].income);
+            const expenseData = Object.keys(monthlyData).map(key => monthlyData[key].expense);
+            
+            new Chart(incomeExpenseCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Ingresos',
+                            data: incomeData,
+                            borderColor: '#4cc9f0',
+                            backgroundColor: 'rgba(76, 201, 240, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Gastos',
+                            data: expenseData,
+                            borderColor: '#f72585',
+                            backgroundColor: 'rgba(247, 37, 133, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Gráfico de Distribución de Gastos
+        if (document.getElementById('expenseDistributionChart')) {
+            const expenseDistributionCtx = document.getElementById('expenseDistributionChart').getContext('2d');
+            
+            const categoryNames = Object.keys(categorySpending);
+            const categoryTotals = categoryNames.map(name => categorySpending[name].total);
+            const categoryColors = categoryNames.map(name => categorySpending[name].color);
+            
+            new Chart(expenseDistributionCtx, {
+                type: 'pie',
+                data: {
+                    labels: categoryNames,
+                    datasets: [{
+                        data: categoryTotals,
+                        backgroundColor: categoryColors,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Gráfico de Inversiones (ejemplo estático)
+        if (document.getElementById('investmentChart')) {
+            const investmentCtx = document.getElementById('investmentChart').getContext('2d');
+            
+            new Chart(investmentCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Valor de Inversiones',
+                        data: [5000, 5200, 5400, 5300, 5600, 5800],
+                        backgroundColor: 'rgba(72, 149, 239, 0.8)',
+                        borderColor: 'rgba(72, 149, 239, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

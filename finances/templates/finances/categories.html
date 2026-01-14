@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Categorías - Finanzas del Hogar{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Categorías</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+                <i class="fas fa-plus me-1"></i>Nueva Categoría
+            </button>
+        </div>
+    </div>
+
+    <!-- Lista de Categorías -->
+    <div class="row">
+        {% for category in categories %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="card-title">
+                                <i class="{{ category.icon }} me-2"></i>{{ category.name }}
+                            </h5>
+                            <span class="badge bg-{% if category.category_type == 'INCOME' %}success{% elif category.category_type == 'EXPENSE' %}danger{% else %}info{% endif %}">
+                                {{ category.get_category_type_display }}
+                            </span>
+                        </div>
+                        <span class="category-color" style="background-color: {{ category.color }}; width: 20px; height: 20px; border-radius: 50%;"></span>
+                    </div>
+                    <p class="card-text mt-3 text-muted small">{{ category.description|default:"Sin descripción" }}</p>
+                    {% if category.budget_limit %}
+                    <div class="mt-3">
+                        <small class="text-muted">Límite presupuestal: ${{ category.budget_limit|floatformat:2 }}</small>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-transparent">
+                    <form method="post" action="{% url 'delete_category' category.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta categoría?')">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="text-center py-5">
+                <i class="fas fa-tags fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No hay categorías creadas</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Modal para agregar categoría -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nueva Categoría</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" id="categoryForm">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" form="categoryForm" class="btn btn-primary">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

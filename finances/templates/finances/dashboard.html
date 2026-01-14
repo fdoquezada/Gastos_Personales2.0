@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - Finanzas del Hogar{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Main Content -->
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">Dashboard</h1>
+                <div class="btn-toolbar mb-2 mb-md-0">
+                    <div class="btn-group me-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary">{{ current_month }}</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="row mb-4">
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card income-stat h-100">
+                        <div class="card-body stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-money-bill-wave"></i>
+                            </div>
+                            <div class="stat-value">${{ monthly_income|floatformat:2 }}</div>
+                            <div class="stat-label">Ingresos del Mes</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card expense-stat h-100">
+                        <div class="card-body stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div class="stat-value">${{ monthly_expenses|floatformat:2 }}</div>
+                            <div class="stat-label">Gastos del Mes</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card investment-stat h-100">
+                        <div class="card-body stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div class="stat-value">${{ monthly_investments|floatformat:2 }}</div>
+                            <div class="stat-label">Inversiones del Mes</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card balance-stat h-100">
+                        <div class="card-body stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-balance-scale"></i>
+                            </div>
+                            <div class="stat-value">${{ monthly_balance|floatformat:2 }}</div>
+                            <div class="stat-label">Balance del Mes</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Expense by Category Chart -->
+                <div class="col-lg-8 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Gastos por Categoría</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="categoryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Investment Summary -->
+                <div class="col-lg-4 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Resumen de Inversiones</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <h6 class="text-muted">Valor Total</h6>
+                                <h3 class="text-success">${{ total_investment_value|floatformat:2 }}</h3>
+                                <small class="text-muted">Inversión inicial: ${{ total_investment_initial|floatformat:2 }}</small>
+                            </div>
+                            <div class="mb-3">
+                                <h6 class="text-muted">ROI</h6>
+                                <h4 class="{% if investment_roi > 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ investment_roi|floatformat:2 }}%
+                                </h4>
+                            </div>
+                            <a href="{% url 'investments' %}" class="btn btn-outline-primary btn-sm">Ver Todas las Inversiones</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">Transacciones Recientes</h5>
+                            <a href="{% url 'transactions' %}" class="btn btn-sm btn-primary">Ver Todas</a>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Descripción</th>
+                                            <th>Categoría</th>
+                                            <th>Tipo</th>
+                                            <th class="text-end">Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for transaction in recent_transactions %}
+                                        <tr>
+                                            <td>{{ transaction.date|date:"d/m/Y" }}</td>
+                                            <td>{{ transaction.description|truncatechars:30 }}</td>
+                                            <td>
+                                                <span class="badge" style="background-color: {{ transaction.category.color }}; color: white;">
+                                                    {{ transaction.category.name }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {% if transaction.transaction_type == 'INCOME' %}
+                                                <span class="badge badge-income">Ingreso</span>
+                                                {% elif transaction.transaction_type == 'EXPENSE' %}
+                                                <span class="badge badge-expense">Gasto</span>
+                                                {% else %}
+                                                <span class="badge badge-investment">Inversión</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end fw-bold {% if transaction.transaction_type == 'INCOME' %}text-success{% else %}text-danger{% endif %}">
+                                                {% if transaction.transaction_type == 'INCOME' %}+{% else %}-{% endif %}
+                                                ${{ transaction.amount|floatformat:2 }}
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="5" class="text-center">No hay transacciones registradas</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Category Chart
+    const categoryData = JSON.parse('{{ category_data|escapejs }}');
+    
+    if (categoryData.length > 0) {
+        const ctx = document.getElementById('categoryChart').getContext('2d');
+        const categoryChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: categoryData.map(item => item.name),
+                datasets: [{
+                    data: categoryData.map(item => item.value),
+                    backgroundColor: categoryData.map(item => item.color),
+                    borderColor: '#fff',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Distribución de Categorías'
+                    }
+                }
+            }   
+        });
+    }
+</script>   
+{% endblock %}

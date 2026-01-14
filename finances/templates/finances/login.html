@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Iniciar Sesión - Finanzas del Hogar{% endblock %}
+
+{% block public_content %}
+<div class="login-container py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="card shadow-lg border-0">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <h2 class="fw-bold text-primary">
+                                <i class="fas fa-piggy-bank me-2"></i>
+                                Finanzas Hogar
+                            </h2>
+                            <p class="text-muted">Inicia sesión para gestionar tus finanzas</p>
+                        </div>
+                        
+                        {% if form.errors %}
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            Usuario o contraseña incorrectos. Inténtalo de nuevo.
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endif %}
+                        
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+                            
+                            <div class="mb-3">
+                                <label for="username" class="form-label fw-semibold">
+                                    <i class="fas fa-user me-1"></i>Usuario
+                                </label>
+                                <input type="text" name="username" class="form-control form-control-lg" 
+                                       id="username" required autofocus>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="password" class="form-label fw-semibold">
+                                    <i class="fas fa-lock me-1"></i>Contraseña
+                                </label>
+                                <input type="password" name="password" class="form-control form-control-lg" 
+                                       id="password" required>
+                                <div class="form-text text-end">
+                                    <a href="#" class="text-decoration-none small">¿Olvidaste tu contraseña?</a>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid mb-4">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-sign-in-alt me-2"></i>Iniciar Sesión
+                                </button>
+                            </div>
+                            
+                            <div class="text-center">
+                                <p class="text-muted mb-0">¿No tienes cuenta?</p>
+                                <a href="{% url 'register' %}" class="btn btn-outline-primary mt-2">
+                                    <i class="fas fa-user-plus me-1"></i>Crear Cuenta
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-4">
+                    <p class="text-muted small">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Tus datos están protegidos y encriptados
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
